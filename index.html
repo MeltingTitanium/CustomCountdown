@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Custom Countdown</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --primary: #6366f1;
+  --primary-dark: #4f46e5;
+  --bg-main: #0f0f23;
+  --bg-card: #1a1a2e;
+  --text-primary: #ffffff;
+  --text-secondary: #a1a1aa;
+  --border: #27272a;
+  --success: #10b981;
+  --danger: #ef4444;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+  font-family: 'JetBrains Mono', monospace;
+  background: var(--bg-main);
+  color: var(--text-primary);
+  overflow: hidden;
+}
+
+/* TIMER DISPLAY */
+.timer-view {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 2rem;
+}
+
+.countdown-display {
+  font-size: clamp(1.5rem, 8vw, 6rem);
+  font-weight: 700;
+  margin-bottom: 1rem;
+  line-height: 1.1;
+  outline: none !important;
+  cursor: default;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  pointer-events: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.countdown-label {
+  font-size: clamp(0.9rem, 3vw, 1.5rem);
+  color: var(--text-secondary);
+  margin-bottom: 2rem;
+}
+
+.settings-hint {
+  position: fixed;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  opacity: 0.7;
+  transition: opacity 0.3s ease;
+}
+
+/* SETTINGS PANEL */
+.settings-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.settings-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 2rem;
+  width: 90%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+
+.settings-header {
+  margin: 0 0 2rem 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.form-group {
+  margin-bottom: 1.5rem;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.form-input, .form-select {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: var(--bg-main);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 1rem;
+  transition: border-color 0.2s ease;
+}
+
+.form-input:focus, .form-select:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.color-input {
+  height: 3rem;
+  padding: 0.25rem;
+  cursor: pointer;
+}
+
+.button-group {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 2rem;
+}
+
+.btn {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: white;
+}
+
+.btn-primary:hover {
+  background: var(--primary-dark);
+}
+
+.btn-secondary {
+  background: var(--bg-main);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+}
+
+.btn-secondary:hover {
+  background: var(--border);
+}
+
+/* EFFECTS */
+.glow-effect {
+  animation: glow-pulse 2s ease-in-out infinite;
+}
+
+@keyframes glow-pulse {
+  0%, 100% { text-shadow: 0 0 20px currentColor, 0 0 40px currentColor; }
+  50% { text-shadow: 0 0 30px currentColor, 0 0 60px currentColor, 0 0 80px currentColor; }
+}
+
+.fade-transition {
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+
+.fade-transition.show {
+  opacity: 1;
+}
+
+/* RESPONSIVE */
+@media (max-width: 640px) {
+  .settings-panel {
+    margin: 1rem;
+    padding: 1.5rem;
+  }
+  
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+  
+  .button-group {
+    flex-direction: column;
+  }
+}
+
+/* DYNAMIC STYLING */
+.dynamic-font {
+  font-family: var(--countdown-font, 'JetBrains Mono');
+}
+
+.dynamic-colors {
+  color: var(--countdown-color, #ffffff);
+  background: var(--countdown-bg, #0f0f23);
+}
+
+.no-select {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+</style>
+</head>
+<body class="dynamic-colors">
+
+<!-- TIMER VIEW -->
+<div id="timerView" class="timer-view fade-transition">
+  <span id="countdownDisplay" class="countdown-display dynamic-font"></span>
+  <div id="countdownLabel" class="countdown-label"></div>
+  <div id="settingsHint" class="settings-hint" style="display: none;"></div>
+  <input id="focusCapture" style="position: absolute; left: -9999px; top: -9999px; opacity: 0; pointer-events: none; width: 0; height: 0; border: none; outline: none;" readonly tabindex="-1">
+</div>
+
+<!-- SETTINGS OVERLAY -->
+<div id="settingsOverlay" class="settings-overlay fade-transition" style="display: none;">
+  <div class="settings-panel">
+    <h2 class="settings-header">Countdown Settings</h2>
+    
+    <form id="settingsForm">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Target Date</label>
+          <input type="date" id="targetDate" class="form-input" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Target Time</label>
+          <input type="time" id="targetTime" class="form-input" required>
+        </div>
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label">Timezone</label>
+        <select id="timezone" class="form-select"></select>
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label">Countdown Label (optional)</label>
+        <input type="text" id="countdownText" class="form-input" placeholder="until the big day...">
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label">Completion Message</label>
+        <input type="text" id="completionText" class="form-input" value="🎉 IT'S TIME! 🎉">
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label">Font Family</label>
+        <select id="fontFamily" class="form-select">
+          <option value="'JetBrains Mono', monospace">JetBrains Mono</option>
+          <option value="'Orbitron', monospace">Orbitron</option>
+          <option value="'Courier New', monospace">Courier New</option>
+          <option value="Arial, sans-serif">Arial</option>
+          <option value="'Times New Roman', serif">Times New Roman</option>
+        </select>
+      </div>
+      
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Font Size: <span id="fontSizeValue">60</span>px</label>
+          <input type="range" id="fontSize" class="form-input" min="20" max="120" value="60">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Completion Effect</label>
+          <select id="completionEffect" class="form-select">
+            <option value="none">None</option>
+            <option value="glow">Glow Effect</option>
+            <option value="confetti">Confetti</option>
+            <option value="both">Both</option>
+          </select>
+        </div>
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label">
+          <input type="checkbox" id="allowTextSelection" style="margin-right: 0.5rem;" checked>
+          Allow text selection/highlighting
+        </label>
+      </div>
+      
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Text Color</label>
+          <input type="color" id="textColor" class="form-input color-input" value="#ffffff">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Background Color</label>
+          <input type="color" id="backgroundColor" class="form-input color-input" value="#0f0f23">
+        </div>
+      </div>
+      
+      <div class="button-group">
+        <button type="button" id="resetBtn" class="btn btn-secondary">Reset to Default</button>
+        <button type="button" id="previewBtn" class="btn btn-secondary">Preview (5s)</button>
+        <button type="submit" class="btn btn-primary">Start Countdown</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/luxon@3/build/global/luxon.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+<script>
+class CountdownTimer {
+  constructor() {
+    this.config = null;
+    this.intervalId = null;
+    this.previewTimeout = null;
+    this.escapeHoldTimeout = null;
+    this.confettiInterval = null;
+    this.isPreviewMode = false;
+    this.isCompleted = false;
+    
+    this.elements = {
+      timerView: document.getElementById('timerView'),
+      settingsOverlay: document.getElementById('settingsOverlay'),
+      countdownDisplay: document.getElementById('countdownDisplay'),
+      countdownLabel: document.getElementById('countdownLabel'),
+      settingsHint: document.getElementById('settingsHint'),
+      settingsForm: document.getElementById('settingsForm'),
+      previewBtn: document.getElementById('previewBtn'),
+      resetBtn: document.getElementById('resetBtn'),
+      fontSizeSlider: document.getElementById('fontSize'),
+      fontSizeValue: document.getElementById('fontSizeValue'),
+      focusCapture: document.getElementById('focusCapture')
+    };
+    
+    this.init();
+  }
+  
+  init() {
+    this.setupEventListeners();
+    this.populateTimezones();
+    this.loadSavedConfig();
+    
+    const saved = this.getSavedConfig();
+    if (saved) {
+      this.config = saved;
+      this.startTimer();
+    } else {
+      this.showSettings();
+    }
+  }
+  
+  setupEventListeners() {
+    // Form submission
+    this.elements.settingsForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      this.saveAndStart();
+    });
+    
+    // Preview button
+    this.elements.previewBtn.addEventListener('click', () => {
+      this.startPreview();
+    });
+    
+    // Reset button
+    this.elements.resetBtn.addEventListener('click', () => {
+      this.resetToDefaults();
+    });
+    
+    // Font size slider
+    this.elements.fontSizeSlider.addEventListener('input', (e) => {
+      this.elements.fontSizeValue.textContent = e.target.value;
+    });
+    
+    // ESC key detection
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        this.showSettings();
+      }
+    });
+    
+    // Settings overlay click-outside-to-close
+    this.elements.settingsOverlay.addEventListener('click', (e) => {
+      if (e.target === this.elements.settingsOverlay) {
+        if (this.config) {
+          this.hideSettings();
+        }
+      }
+    });
+    
+    // Capture any clicks on timer view and redirect focus instantly
+    this.elements.timerView.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      this.elements.focusCapture.focus();
+    });
+    
+    this.elements.timerView.addEventListener('click', (e) => {
+      if (e.target !== this.elements.settingsOverlay) {
+        e.preventDefault();
+        this.elements.focusCapture.focus();
+      }
+    });
+  }
+  
+  populateTimezones() {
+    const select = document.getElementById('timezone');
+    const userTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    
+    // Add "Your Timezone" option first
+    const yourTzOption = document.createElement('option');
+    yourTzOption.value = userTz;
+    yourTzOption.textContent = 'Your Timezone';
+    yourTzOption.selected = true;
+    select.appendChild(yourTzOption);
+    
+    // Get common timezones
+    const timezones = [
+      'UTC',
+      'America/New_York',
+      'America/Chicago', 
+      'America/Denver',
+      'America/Los_Angeles',
+      'Europe/London',
+      'Europe/Paris',
+      'Europe/Berlin',
+      'Asia/Tokyo',
+      'Asia/Shanghai',
+      'Australia/Sydney'
+    ];
+    
+    // Remove user timezone from list to avoid duplicates
+    const filteredTimezones = timezones.filter(tz => tz !== userTz);
+    
+    filteredTimezones.forEach(tz => {
+      const option = document.createElement('option');
+      option.value = tz;
+      option.textContent = tz.replace('_', ' ');
+      select.appendChild(option);
+    });
+  }
+  
+  loadSavedConfig() {
+    const form = this.elements.settingsForm;
+    const saved = this.getSavedConfig();
+    
+    if (saved) {
+      // Convert UTC back to local time for form
+      const targetLocal = luxon.DateTime.fromISO(saved.targetUTC).setZone(saved.timezone);
+      
+      document.getElementById('targetDate').value = targetLocal.toFormat('yyyy-MM-dd');
+      document.getElementById('targetTime').value = targetLocal.toFormat('HH:mm');
+      document.getElementById('timezone').value = saved.timezone;
+      document.getElementById('countdownText').value = saved.countdownText || '';
+      document.getElementById('completionText').value = saved.completionText;
+      document.getElementById('fontFamily').value = saved.fontFamily;
+      document.getElementById('fontSize').value = saved.fontSize;
+      document.getElementById('completionEffect').value = saved.completionEffect;
+      document.getElementById('textColor').value = saved.textColor;
+      document.getElementById('backgroundColor').value = saved.backgroundColor;
+      document.getElementById('allowTextSelection').checked = saved.allowTextSelection !== false;
+      
+      // Update font size display
+      this.elements.fontSizeValue.textContent = saved.fontSize;
+    } else {
+      // Set defaults
+      const tomorrow = luxon.DateTime.now().plus({ days: 1 });
+      document.getElementById('targetDate').value = tomorrow.toFormat('yyyy-MM-dd');
+      document.getElementById('targetTime').value = '12:00';
+      this.elements.fontSizeValue.textContent = '60';
+    }
+  }
+  
+  resetToDefaults() {
+    const tomorrow = luxon.DateTime.now().plus({ days: 1 });
+    document.getElementById('targetDate').value = tomorrow.toFormat('yyyy-MM-dd');
+    document.getElementById('targetTime').value = '12:00';
+    document.getElementById('timezone').value = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    document.getElementById('countdownText').value = '';
+    document.getElementById('completionText').value = '🎉 IT\'S TIME! 🎉';
+    document.getElementById('fontFamily').value = "'JetBrains Mono', monospace";
+    document.getElementById('fontSize').value = '60';
+    document.getElementById('completionEffect').value = 'none';
+    document.getElementById('textColor').value = '#ffffff';
+    document.getElementById('backgroundColor').value = '#0f0f23';
+    document.getElementById('allowTextSelection').checked = true;
+    this.elements.fontSizeValue.textContent = '60';
+  }
+  
+  getFormConfig() {
+    const date = document.getElementById('targetDate').value;
+    const time = document.getElementById('targetTime').value;
+    const timezone = document.getElementById('timezone').value;
+    
+    // Create target datetime in specified timezone, then convert to UTC
+    const targetLocal = luxon.DateTime.fromISO(`${date}T${time}`, { zone: timezone });
+    const targetUTC = targetLocal.toUTC().toISO();
+    
+    return {
+      targetUTC,
+      timezone,
+      countdownText: document.getElementById('countdownText').value.trim(),
+      completionText: document.getElementById('completionText').value.trim() || '🎉 DONE! 🎉',
+      fontFamily: document.getElementById('fontFamily').value,
+      fontSize: parseInt(document.getElementById('fontSize').value),
+      completionEffect: document.getElementById('completionEffect').value,
+      textColor: document.getElementById('textColor').value,
+      backgroundColor: document.getElementById('backgroundColor').value,
+      allowTextSelection: document.getElementById('allowTextSelection').checked
+    };
+  }
+  
+  saveAndStart() {
+    this.config = this.getFormConfig();
+    this.saveConfig(this.config);
+    this.hideSettings();
+    
+    // Fade to black with transition message
+    this.elements.timerView.style.transition = 'all 0.5s ease';
+    this.elements.timerView.style.background = '#000000';
+    this.elements.timerView.style.color = '#ffffff';
+    
+    this.elements.countdownDisplay.textContent = 'Click escape to change settings';
+    this.elements.countdownDisplay.style.fontSize = '2rem';
+    this.elements.countdownLabel.style.display = 'none';
+    this.elements.timerView.classList.add('show');
+    
+    setTimeout(() => {
+      location.reload();
+    }, 3000);
+  }
+  
+  startPreview() {
+    this.isPreviewMode = true;
+    this.config = this.getFormConfig();
+    
+    // Override target to be 5 seconds from now for preview
+    this.config.targetUTC = luxon.DateTime.now().plus({ seconds: 5 }).toUTC().toISO();
+    
+    this.hideSettings();
+    this.startTimer();
+    
+    this.previewTimeout = setTimeout(() => {
+      this.stopTimer();
+      this.isPreviewMode = false;
+      this.showSettings();
+    }, 6000); // Extra second to see completion
+  }
+  
+  startTimer() {
+    this.stopTimer(); // Clear any existing timer
+    this.isCompleted = false;
+    this.applyStyles();
+    this.showTimer();
+    
+    // Reset any transition styles from saveAndStart
+    this.elements.timerView.style.transition = '';
+    
+    // Recreate countdown display element to ensure clean state
+    const newDisplay = document.createElement('span');
+    newDisplay.id = 'countdownDisplay';
+    newDisplay.className = 'countdown-display dynamic-font';
+    this.elements.countdownDisplay.parentNode.replaceChild(newDisplay, this.elements.countdownDisplay);
+    this.elements.countdownDisplay = newDisplay;
+    
+    // Immediately focus the hidden input to prevent any flashing
+    setTimeout(() => {
+      this.elements.focusCapture.focus();
+    }, 0);
+    
+    const target = luxon.DateTime.fromISO(this.config.targetUTC);
+    
+    const updateDisplay = () => {
+      const now = luxon.DateTime.now();
+      const diff = target.diff(now, ['days', 'hours', 'minutes', 'seconds']);
+      
+      if (diff.toMillis() <= 0) {
+        this.onComplete();
+        return;
+      }
+      
+      const days = Math.floor(diff.days);
+      const hours = Math.floor(diff.hours);
+      const minutes = Math.floor(diff.minutes);
+      const seconds = Math.floor(diff.seconds);
+      
+      let display = '';
+      if (days > 0) display += `${days}d `;
+      if (days > 0 || hours > 0) display += `${hours.toString().padStart(2, '0')}h `;
+      if (days > 0 || hours > 0 || minutes > 0) display += `${minutes.toString().padStart(2, '0')}m `;
+      display += `${seconds.toString().padStart(2, '0')}s`;
+      
+      this.elements.countdownDisplay.textContent = display;
+    };
+    
+    // Set label
+    this.elements.countdownLabel.textContent = this.config.countdownText;
+    this.elements.countdownLabel.style.display = this.config.countdownText ? 'block' : 'none';
+    
+    // Apply styles after creating new element
+    this.applyStyles();
+    
+    updateDisplay();
+    this.intervalId = setInterval(updateDisplay, 1000);
+  }
+  
+  stopTimer() {
+    if (this.intervalId) {
+      clearInterval(this.intervalId);
+      this.intervalId = null;
+    }
+    if (this.previewTimeout) {
+      clearTimeout(this.previewTimeout);
+      this.previewTimeout = null;
+    }
+    if (this.confettiInterval) {
+      clearInterval(this.confettiInterval);
+      this.confettiInterval = null;
+    }
+    
+    // Remove effects
+    this.elements.countdownDisplay.classList.remove('glow-effect');
+  }
+  
+  onComplete() {
+    this.stopTimer();
+    this.isCompleted = true;
+    
+    this.elements.countdownDisplay.textContent = this.config.completionText;
+    this.elements.countdownLabel.style.display = 'none';
+    
+    // Apply effects
+    const effect = this.config.completionEffect;
+    
+    if (effect === 'glow' || effect === 'both') {
+      this.elements.countdownDisplay.classList.add('glow-effect');
+    }
+    
+    if (effect === 'confetti' || effect === 'both') {
+      const fireConfetti = () => {
+        confetti({
+          particleCount: 100,
+          spread: 70,
+          origin: { y: 0.6 }
+        });
+      };
+      
+      fireConfetti();
+      this.confettiInterval = setInterval(fireConfetti, 2000);
+    }
+  }
+  
+  applyStyles() {
+    document.documentElement.style.setProperty('--countdown-font', this.config.fontFamily);
+    document.documentElement.style.setProperty('--countdown-color', this.config.textColor);
+    document.documentElement.style.setProperty('--countdown-bg', this.config.backgroundColor);
+    
+    this.elements.countdownDisplay.style.fontSize = `${this.config.fontSize}px`;
+    
+    // Force remove any focus and prevent it
+    this.elements.countdownDisplay.blur();
+    this.elements.countdownDisplay.tabIndex = -1;
+    this.elements.countdownDisplay.contentEditable = 'false';
+    
+    // ONLY if selection is enabled, override the CSS defaults
+    if (this.config.allowTextSelection) {
+      this.elements.countdownDisplay.style.userSelect = 'text';
+      this.elements.countdownDisplay.style.webkitUserSelect = 'text';
+      this.elements.countdownDisplay.style.mozUserSelect = 'text';
+      this.elements.countdownDisplay.style.msUserSelect = 'text';
+      this.elements.countdownDisplay.style.pointerEvents = 'auto';
+      this.elements.countdownLabel.classList.remove('no-select');
+    } else {
+      // Keep defaults (completely unselectable)
+      this.elements.countdownDisplay.style.userSelect = 'none';
+      this.elements.countdownDisplay.style.webkitUserSelect = 'none';
+      this.elements.countdownDisplay.style.mozUserSelect = 'none';
+      this.elements.countdownDisplay.style.msUserSelect = 'none';
+      this.elements.countdownDisplay.style.pointerEvents = 'none';
+      this.elements.countdownLabel.classList.add('no-select');
+    }
+  }
+  
+  showSettings() {
+    this.stopTimer();
+    this.elements.settingsOverlay.style.display = 'flex';
+    setTimeout(() => {
+      this.elements.settingsOverlay.classList.add('show');
+    }, 10);
+  }
+  
+  hideSettings() {
+    this.elements.settingsOverlay.classList.remove('show');
+    setTimeout(() => {
+      this.elements.settingsOverlay.style.display = 'none';
+    }, 500);
+  }
+  
+  showTimer() {
+    this.elements.timerView.classList.add('show');
+  }
+  
+  saveConfig(config) {
+    localStorage.setItem('countdownConfig', JSON.stringify(config));
+  }
+  
+  getSavedConfig() {
+    const saved = localStorage.getItem('countdownConfig');
+    return saved ? JSON.parse(saved) : null;
+  }
+}
+
+// Initialize the countdown timer
+new CountdownTimer();
+</script>
+
+</body>
+</html>
