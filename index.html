@@ -307,8 +307,8 @@ html, body {
       
       <div class="form-group">
         <label class="form-label">
-          <input type="checkbox" id="allowTextSelection" style="margin-right: 0.5rem;" checked>
-          Allow text selection/highlighting
+          <input type="checkbox" id="enableNotifications" style="margin-right: 0.5rem;">
+          Send notification when countdown completes
         </label>
       </div>
       
@@ -345,6 +345,8 @@ class CountdownTimer {
     this.confettiInterval = null;
     this.isPreviewMode = false;
     this.isCompleted = false;
+    this.notificationSent = false;
+    this.lastUpdateTime = null;
     
     this.elements = {
       timerView: document.getElementById('timerView'),
@@ -357,7 +359,8 @@ class CountdownTimer {
       resetBtn: document.getElementById('resetBtn'),
       fontSizeSlider: document.getElementById('fontSize'),
       fontSizeValue: document.getElementById('fontSizeValue'),
-      focusCapture: document.getElementById('focusCapture')
+      focusCapture: document.getElementById('focusCapture'),
+      enableNotifications: document.getElementById('enableNotifications')
     };
     
     this.init();
@@ -399,6 +402,16 @@ class CountdownTimer {
       this.elements.fontSizeValue.textContent = e.target.value;
     });
     
+    // Notification checkbox
+    this.elements.enableNotifications.addEventListener('change', async (e) => {
+      if (e.target.checked) {
+        const permission = await this.requestNotificationPermission();
+        if (permission !== 'granted') {
+          e.target.checked = false;
+        }
+      }
+    });
+    
     // ESC key detection
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
@@ -427,6 +440,52 @@ class CountdownTimer {
         this.elements.focusCapture.focus();
       }
     });
+    
+    // Handle visibility change to fix tab switching bug
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && this.config && !this.isCompleted) {
+        // Force immediate update when tab becomes visible
+        this.updateDisplay();
+      }
+    });
+  }
+  
+  async requestNotificationPermission() {
+    if (!('Notification' in window)) {
+      alert('This browser does not support notifications');
+      return 'denied';
+    }
+    
+    if (Notification.permission === 'granted') {
+      return 'granted';
+    }
+    
+    if (Notification.permission !== 'denied') {
+      const permission = await Notification.requestPermission();
+      return permission;
+    }
+    
+    return 'denied';
+  }
+  
+  sendNotification() {
+    if (!this.config.enableNotifications || this.notificationSent) return;
+    
+    if (Notification.permission === 'granted') {
+      const notification = new Notification('Countdown Complete!', {
+        body: this.config.completionText,
+        icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="50" font-size="50">🎉</text></svg>',
+        tag: 'countdown-complete',
+        requireInteraction: true
+      });
+      
+      notification.onclick = () => {
+        window.focus();
+        notification.close();
+      };
+      
+      this.notificationSent = true;
+    }
   }
   
   populateTimezones() {
@@ -484,7 +543,7 @@ class CountdownTimer {
       document.getElementById('completionEffect').value = saved.completionEffect;
       document.getElementById('textColor').value = saved.textColor;
       document.getElementById('backgroundColor').value = saved.backgroundColor;
-      document.getElementById('allowTextSelection').checked = saved.allowTextSelection !== false;
+      document.getElementById('enableNotifications').checked = saved.enableNotifications || false;
       
       // Update font size display
       this.elements.fontSizeValue.textContent = saved.fontSize;
@@ -509,7 +568,7 @@ class CountdownTimer {
     document.getElementById('completionEffect').value = 'none';
     document.getElementById('textColor').value = '#ffffff';
     document.getElementById('backgroundColor').value = '#0f0f23';
-    document.getElementById('allowTextSelection').checked = true;
+    document.getElementById('enableNotifications').checked = false;
     this.elements.fontSizeValue.textContent = '60';
   }
   
@@ -532,7 +591,7 @@ class CountdownTimer {
       completionEffect: document.getElementById('completionEffect').value,
       textColor: document.getElementById('textColor').value,
       backgroundColor: document.getElementById('backgroundColor').value,
-      allowTextSelection: document.getElementById('allowTextSelection').checked
+      enableNotifications: document.getElementById('enableNotifications').checked
     };
   }
   
@@ -569,13 +628,40 @@ class CountdownTimer {
     this.previewTimeout = setTimeout(() => {
       this.stopTimer();
       this.isPreviewMode = false;
+      this.notificationSent = false;
       this.showSettings();
     }, 6000); // Extra second to see completion
+  }
+  
+  updateDisplay() {
+    const target = luxon.DateTime.fromISO(this.config.targetUTC);
+    const now = luxon.DateTime.now();
+    const diff = target.diff(now, ['days', 'hours', 'minutes', 'seconds']);
+    
+    if (diff.toMillis() <= 0) {
+      this.onComplete();
+      return;
+    }
+    
+    const days = Math.floor(diff.days);
+    const hours = Math.floor(diff.hours);
+    const minutes = Math.floor(diff.minutes);
+    const seconds = Math.floor(diff.seconds);
+    
+    let display = '';
+    if (days > 0) display += `${days}d `;
+    if (days > 0 || hours > 0) display += `${hours.toString().padStart(2, '0')}h `;
+    if (days > 0 || hours > 0 || minutes > 0) display += `${minutes.toString().padStart(2, '0')}m `;
+    display += `${seconds.toString().padStart(2, '0')}s`;
+    
+    this.elements.countdownDisplay.textContent = display;
+    this.lastUpdateTime = now.toMillis();
   }
   
   startTimer() {
     this.stopTimer(); // Clear any existing timer
     this.isCompleted = false;
+    this.notificationSent = false;
     this.applyStyles();
     this.showTimer();
     
@@ -594,31 +680,6 @@ class CountdownTimer {
       this.elements.focusCapture.focus();
     }, 0);
     
-    const target = luxon.DateTime.fromISO(this.config.targetUTC);
-    
-    const updateDisplay = () => {
-      const now = luxon.DateTime.now();
-      const diff = target.diff(now, ['days', 'hours', 'minutes', 'seconds']);
-      
-      if (diff.toMillis() <= 0) {
-        this.onComplete();
-        return;
-      }
-      
-      const days = Math.floor(diff.days);
-      const hours = Math.floor(diff.hours);
-      const minutes = Math.floor(diff.minutes);
-      const seconds = Math.floor(diff.seconds);
-      
-      let display = '';
-      if (days > 0) display += `${days}d `;
-      if (days > 0 || hours > 0) display += `${hours.toString().padStart(2, '0')}h `;
-      if (days > 0 || hours > 0 || minutes > 0) display += `${minutes.toString().padStart(2, '0')}m `;
-      display += `${seconds.toString().padStart(2, '0')}s`;
-      
-      this.elements.countdownDisplay.textContent = display;
-    };
-    
     // Set label
     this.elements.countdownLabel.textContent = this.config.countdownText;
     this.elements.countdownLabel.style.display = this.config.countdownText ? 'block' : 'none';
@@ -626,8 +687,11 @@ class CountdownTimer {
     // Apply styles after creating new element
     this.applyStyles();
     
-    updateDisplay();
-    this.intervalId = setInterval(updateDisplay, 1000);
+    // Initial update
+    this.updateDisplay();
+    
+    // Update every 100ms for better accuracy when switching tabs
+    this.intervalId = setInterval(() => this.updateDisplay(), 100);
   }
   
   stopTimer() {
@@ -649,11 +713,16 @@ class CountdownTimer {
   }
   
   onComplete() {
+    if (this.isCompleted) return;
+    
     this.stopTimer();
     this.isCompleted = true;
     
     this.elements.countdownDisplay.textContent = this.config.completionText;
     this.elements.countdownLabel.style.display = 'none';
+    
+    // Send notification
+    this.sendNotification();
     
     // Apply effects
     const effect = this.config.completionEffect;
@@ -688,23 +757,13 @@ class CountdownTimer {
     this.elements.countdownDisplay.tabIndex = -1;
     this.elements.countdownDisplay.contentEditable = 'false';
     
-    // ONLY if selection is enabled, override the CSS defaults
-    if (this.config.allowTextSelection) {
-      this.elements.countdownDisplay.style.userSelect = 'text';
-      this.elements.countdownDisplay.style.webkitUserSelect = 'text';
-      this.elements.countdownDisplay.style.mozUserSelect = 'text';
-      this.elements.countdownDisplay.style.msUserSelect = 'text';
-      this.elements.countdownDisplay.style.pointerEvents = 'auto';
-      this.elements.countdownLabel.classList.remove('no-select');
-    } else {
-      // Keep defaults (completely unselectable)
-      this.elements.countdownDisplay.style.userSelect = 'none';
-      this.elements.countdownDisplay.style.webkitUserSelect = 'none';
-      this.elements.countdownDisplay.style.mozUserSelect = 'none';
-      this.elements.countdownDisplay.style.msUserSelect = 'none';
-      this.elements.countdownDisplay.style.pointerEvents = 'none';
-      this.elements.countdownLabel.classList.add('no-select');
-    }
+    // Always unselectable
+    this.elements.countdownDisplay.style.userSelect = 'none';
+    this.elements.countdownDisplay.style.webkitUserSelect = 'none';
+    this.elements.countdownDisplay.style.mozUserSelect = 'none';
+    this.elements.countdownDisplay.style.msUserSelect = 'none';
+    this.elements.countdownDisplay.style.pointerEvents = 'none';
+    this.elements.countdownLabel.classList.add('no-select');
   }
   
   showSettings() {
